@@ -1,4 +1,4 @@
-# Uta Medic Backend - Endpoints
+# Uta Medic Backend - Endpoints y Pruebas
 
 Base URL local:
 
@@ -6,57 +6,36 @@ Base URL local:
 http://localhost:3000
 ```
 
-Si ejecutas el backend en otro puerto, cambia la variable `baseUrl` en Postman.
+Si usas otro puerto, cambia la variable `baseUrl` en Postman.
 
-## GET /
+## Cambios Implementados
 
-Endpoint de prueba que ya venia en el proyecto.
+- Se activo `ConfigModule` global.
+- Se agrego conexion global a Azure SQL con `SqlService`.
+- Se agrego `GET /doctor-ai/patients` para listar pacientes asignados al medico.
+- Se agrego `POST /doctor-ai/analyze` para analizar un paciente con contexto clinico autorizado.
+- Se agrego modo temporal de pruebas con header `x-doctor-user-id`.
+- Se agrego modo mock de Foundry con `FOUNDRY_MOCK_ENABLED`.
+- Se actualizo la llamada real a Foundry para usar `body.agent_reference.type` y `body.agent_reference.name`.
+- Se activo validacion global con `ValidationPipe`.
 
-### Request
+## Autenticacion Para Pruebas
 
-```http
-GET http://localhost:3000/
-```
-
-### Response 200
-
-```text
-Hello World!
-```
-
-## POST /doctor-ai/analyze
-
-Genera un analisis clinico orientativo para un paciente usando:
-
-- contexto clinico autorizado desde Azure SQL
-- asignacion medico-paciente
-- agente medico de Microsoft Foundry / Azure AI Projects
-
-### Importante sobre autenticacion
-
-El controlador espera encontrar el medico autenticado en:
+En produccion, el backend espera que un guard JWT cargue:
 
 ```ts
 request.user.sub
 ```
 
-En la implementacion actual no se dejo un UUID hardcodeado de prueba. Por eso, si todavia no tienes un guard/middleware JWT que cargue `request.user`, este endpoint respondera:
+Ese `sub` debe ser el `Users.id` del medico, equivalente a:
 
-```json
-{
-  "message": "No se encontro el medico autenticado.",
-  "error": "Unauthorized",
-  "statusCode": 401
-}
+```text
+Doctors.user_id
 ```
 
-Cuando conectes tu autenticacion real, envia el token desde Postman en `Authorization: Bearer <token>`.
+Como aun estas probando sin JWT real, usa este modo temporal.
 
-### Modo temporal para pruebas en Postman
-
-Mientras no tengas JWT/guards conectados, puedes activar un header de desarrollo.
-
-Agrega esto a tu `.env`:
+### .env Para Pruebas Locales
 
 ```env
 DEV_AUTH_DOCTOR_HEADER_ENABLED=true
@@ -68,9 +47,11 @@ Luego envia este header en Postman:
 x-doctor-user-id: <doctorUserId>
 ```
 
-El `doctorUserId` es el `Users.id` del medico, que corresponde a `Doctors.user_id`.
+No necesitas enviar `Authorization: Bearer <token>` mientras uses este modo.
 
-Consulta SQL para encontrarlo:
+### Obtener doctorUserId
+
+Ejecuta esta consulta en Azure SQL:
 
 ```sql
 SELECT
@@ -85,23 +66,63 @@ INNER JOIN dbo.Users AS users
 ORDER BY doctor.last_name, doctor.first_name;
 ```
 
-Ejemplo:
+## Foundry
 
-```http
-x-doctor-user-id: 00000000-0000-0000-0000-000000000000
+Para usar el agente real:
+
+```env
+FOUNDRY_MOCK_ENABLED=false
 ```
 
-No uses este modo en produccion. Es solo para pruebas locales hasta conectar la autenticacion real.
+Debes tener sesion Azure disponible para `DefaultAzureCredential`, por ejemplo con:
 
-## GET /doctor-ai/patients
+```bash
+az login
+```
 
-Devuelve la lista de pacientes activos asignados al medico autenticado. Usa este endpoint para obtener el `patientId` que luego necesitas en `POST /doctor-ai/analyze`.
+Para probar sin llamar a Foundry:
+
+```env
+FOUNDRY_MOCK_ENABLED=true
+```
+
+Con mock activo, `POST /doctor-ai/analyze` devuelve una respuesta simulada.
+
+El payload real hacia Foundry usa:
+
+```ts
+body: {
+  agent_reference: {
+    type: 'agent_reference',
+    name: AZURE_AI_AGENT_NAME
+  }
+}
+```
+
+## GET /
+
+Endpoint de prueba base.
 
 ### Request
 
 ```http
+GET http://localhost:3000/
+```
+
+### Response 200
+
+```text
+Hello World!
+```
+
+## GET /doctor-ai/patients
+
+Lista los pacientes activos asignados al medico autenticado. Este endpoint sirve para obtener el `patientId` que despues se usa en `POST /doctor-ai/analyze`.
+
+### Request Para Pruebas Locales
+
+```http
 GET http://localhost:3000/doctor-ai/patients
-Authorization: Bearer <token>
 x-doctor-user-id: <doctorUserId>
 ```
 
@@ -132,7 +153,9 @@ x-doctor-user-id: <doctorUserId>
 }
 ```
 
-### Response 401 - Sin medico autenticado
+### Errores
+
+Sin `x-doctor-user-id` y sin JWT:
 
 ```json
 {
@@ -142,12 +165,25 @@ x-doctor-user-id: <doctorUserId>
 }
 ```
 
-### Request
+Con `x-doctor-user-id` mal escrito:
+
+```json
+{
+  "message": "El header x-doctor-user-id debe ser un UUID valido.",
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+## POST /doctor-ai/analyze
+
+Genera un analisis clinico orientativo para un paciente usando contexto autorizado desde SQL y el agente de Foundry.
+
+### Request Para Pruebas Locales
 
 ```http
 POST http://localhost:3000/doctor-ai/analyze
 Content-Type: application/json
-Authorization: Bearer <token>
 x-doctor-user-id: <doctorUserId>
 ```
 
@@ -160,22 +196,6 @@ x-doctor-user-id: <doctorUserId>
 }
 ```
 
-### Validaciones
-
-`patientId`
-: Debe ser UUID.
-
-`question`
-: Debe ser texto entre 5 y 1000 caracteres.
-
-El `ValidationPipe` global esta activo con:
-
-- `whitelist: true`
-- `forbidNonWhitelisted: true`
-- `transform: true`
-
-Si envias campos extra, Nest respondera error `400`.
-
 ### Response 200
 
 ```json
@@ -187,9 +207,20 @@ Si envias campos extra, Nest respondera error `400`.
 }
 ```
 
-### Response 400 - Body invalido
+### Validaciones
 
-Ejemplo cuando `patientId` no es UUID:
+`patientId`
+: Debe ser UUID.
+
+`question`
+: Debe ser texto entre 5 y 1000 caracteres.
+
+Campos extra
+: Se rechazan porque `forbidNonWhitelisted` esta activo.
+
+### Errores
+
+Body invalido:
 
 ```json
 {
@@ -199,7 +230,7 @@ Ejemplo cuando `patientId` no es UUID:
 }
 ```
 
-### Response 401 - Sin medico autenticado
+Sin medico autenticado:
 
 ```json
 {
@@ -209,7 +240,7 @@ Ejemplo cuando `patientId` no es UUID:
 }
 ```
 
-### Response 403 - Medico sin acceso al paciente
+Paciente no asignado al medico:
 
 ```json
 {
@@ -219,7 +250,7 @@ Ejemplo cuando `patientId` no es UUID:
 }
 ```
 
-### Response 404 - Paciente no existe
+Paciente inexistente:
 
 ```json
 {
@@ -229,9 +260,17 @@ Ejemplo cuando `patientId` no es UUID:
 }
 ```
 
-### Response 500 - SQL o Foundry
+Credenciales Azure faltantes con `FOUNDRY_MOCK_ENABLED=false`:
 
-Puede ocurrir si falla la conexion a Azure SQL o si el agente de Foundry no responde.
+```json
+{
+  "message": "No hay credenciales Azure disponibles para consultar Foundry. Para pruebas locales activa FOUNDRY_MOCK_ENABLED=true o configura Azure CLI / service principal.",
+  "error": "Service Unavailable",
+  "statusCode": 503
+}
+```
+
+Error general de Foundry:
 
 ```json
 {
@@ -241,9 +280,7 @@ Puede ocurrir si falla la conexion a Azure SQL o si el agente de Foundry no resp
 }
 ```
 
-## Variables de entorno necesarias
-
-El backend necesita estas variables en `.env`:
+## Variables .env
 
 ```env
 DB_SERVER=
@@ -256,64 +293,185 @@ AZURE_AI_PROJECT_ENDPOINT=
 AZURE_AI_AGENT_NAME=
 PORT=3000
 
-# Solo para pruebas locales sin JWT real.
-DEV_AUTH_DOCTOR_HEADER_ENABLED=false
-
-# Solo para pruebas locales sin credenciales Azure/Foundry reales.
+DEV_AUTH_DOCTOR_HEADER_ENABLED=true
 FOUNDRY_MOCK_ENABLED=false
 ```
 
-Tambien debes tener credenciales Azure disponibles para `DefaultAzureCredential` si `FOUNDRY_MOCK_ENABLED=false`, por ejemplo con Azure CLI, Visual Studio Code, variables de entorno de service principal, o identidad administrada.
+## Casos De Prueba
 
-El backend llama al agente de Foundry con `responses.create()` usando `body.agent_reference.type` y `body.agent_reference.name`.
+### Caso 1 - Health Check
 
-### Probar sin credenciales Azure
+Request:
 
-Si solo quieres probar Postman, SQL y el flujo completo del endpoint, usa:
+```http
+GET / 
+```
+
+Esperado:
+
+```text
+Hello World!
+```
+
+### Caso 2 - Listar Pacientes Del Medico
+
+Request:
+
+```http
+GET /doctor-ai/patients
+x-doctor-user-id: <doctorUserId valido>
+```
+
+Esperado:
+
+```json
+{
+  "count": 1,
+  "patients": [
+    {
+      "patientId": "uuid-del-paciente"
+    }
+  ]
+}
+```
+
+Usa el `patientId` de esta respuesta para el caso 3.
+
+### Caso 3 - Analizar Paciente Con Foundry Real
+
+Precondicion:
+
+```env
+FOUNDRY_MOCK_ENABLED=false
+```
+
+Y tener sesion Azure activa:
+
+```bash
+az login
+```
+
+Request:
+
+```http
+POST /doctor-ai/analyze
+Content-Type: application/json
+x-doctor-user-id: <doctorUserId valido>
+```
+
+Body:
+
+```json
+{
+  "patientId": "<patientId obtenido del caso 2>",
+  "question": "Resume el caso clinico y dame posibles diagnosticos diferenciales."
+}
+```
+
+Esperado:
+
+```json
+{
+  "patientId": "<patientId>",
+  "answer": "respuesta del agente",
+  "generatedAt": "fecha ISO",
+  "disclaimer": "Resultado orientativo sujeto a revision del medico responsable."
+}
+```
+
+### Caso 4 - Analizar Paciente Con Mock
+
+Precondicion:
 
 ```env
 FOUNDRY_MOCK_ENABLED=true
 ```
 
-Con eso `POST /doctor-ai/analyze` no llama al agente real de Foundry y devuelve una respuesta simulada. Para usar el agente real, cambia:
+Esperado:
 
-```env
-FOUNDRY_MOCK_ENABLED=false
+```json
+{
+  "answer": "Respuesta simulada del agente medico para pruebas locales..."
+}
 ```
 
-Y configura una de estas opciones:
+### Caso 5 - Header De Medico Faltante
 
-- iniciar sesion con Azure CLI (`az login`)
-- iniciar sesion con VS Code Azure extension
-- variables de service principal: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+Request:
 
-## Como probar en Postman
-
-1. Ejecuta el backend:
-
-```bash
-npm run start:dev
+```http
+GET /doctor-ai/patients
 ```
 
-2. Importa el archivo:
+Esperado:
+
+```json
+{
+  "statusCode": 401
+}
+```
+
+### Caso 6 - Header De Medico Invalido
+
+Request:
+
+```http
+GET /doctor-ai/patients
+x-doctor-user-id: abc
+```
+
+Esperado:
+
+```json
+{
+  "statusCode": 400
+}
+```
+
+### Caso 7 - Body Invalido
+
+Request:
+
+```http
+POST /doctor-ai/analyze
+x-doctor-user-id: <doctorUserId valido>
+```
+
+Body:
+
+```json
+{
+  "patientId": "no-es-uuid",
+  "question": "ok"
+}
+```
+
+Esperado:
+
+```json
+{
+  "statusCode": 400
+}
+```
+
+## Flujo Recomendado En Postman
+
+1. Importa:
 
 ```text
 document/uta-medic.postman_collection.json
 ```
 
-3. Edita las variables de la coleccion:
+2. Configura variables:
 
 - `baseUrl`: `http://localhost:3000`
-- `doctorUserId`: UUID real del usuario medico (`Doctors.user_id`)
-- `patientId`: UUID real de un paciente
-- `bearerToken`: token JWT real cuando tengas auth conectada
+- `doctorUserId`: valor real de `Doctors.user_id`
+- `patientId`: se llena despues de llamar `GET /doctor-ai/patients`
 
-4. Prueba primero `GET /`.
+3. Ejecuta `Health - GET /`.
 
-5. Prueba `GET /doctor-ai/patients` para obtener los `patientId`.
+4. Ejecuta `Doctor AI - List My Patients`.
 
-6. Copia un `patientId` en la variable `patientId` de Postman.
+5. Copia un `patientId` de la respuesta.
 
-7. Prueba `POST /doctor-ai/analyze`.
-
-Si aun no hay autenticacion real, el resultado esperado para `GET /doctor-ai/patients` y `POST /doctor-ai/analyze` es `401`.
+6. Ejecuta `Doctor AI - Analyze Patient`.
