@@ -18,7 +18,8 @@ interface RoomInfo {
   waitingPatient?: WaitingPatient;
 }
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({ cors: { origin: 'https://jolly-field-07dc5a10f.7.azurestaticapps.net' } })
+//@WebSocketGateway({ cors: { origin: '*' } })
 export class SignalingGateway {
   @WebSocketServer()
   server: Server;
@@ -134,65 +135,3 @@ export class SignalingGateway {
     client.to(data.roomId).emit('support-message', payload);
   }
 }
-/*import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-
-@WebSocketGateway({ cors: { origin: '*' } })
-export class SignalingGateway {
-  @WebSocketServer()
-  server: Server;
-
-  @SubscribeMessage('join-room')
-  handleJoinRoom(
-    @MessageBody() roomId: string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.join(roomId);
-    client.to(roomId).emit('user-joined', client.id);
-
-    // TODO: cuando exista la tabla de auditoría, reemplazar por un save() real
-    console.log(`[AUDITORÍA] ${new Date().toISOString()} - Cliente ${client.id} se unió a sala ${roomId}`);
-  }
-
-  @SubscribeMessage('offer')
-  handleOffer(
-    @MessageBody() data: { roomId: string; offer: any },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.to(data.roomId).emit('offer', { offer: data.offer, from: client.id });
-  }
-
-  @SubscribeMessage('answer')
-  handleAnswer(
-    @MessageBody() data: { roomId: string; answer: any },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.to(data.roomId).emit('answer', { answer: data.answer, from: client.id });
-  }
-
-  @SubscribeMessage('ice-candidate')
-  handleIceCandidate(
-    @MessageBody() data: { roomId: string; candidate: any },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.to(data.roomId).emit('ice-candidate', {
-      candidate: data.candidate,
-      from: client.id,
-    });
-  }
-
-  @SubscribeMessage('end-call')
-  handleEndCall(
-    @MessageBody() data: { roomId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.to(data.roomId).emit('call-ended');
-    console.log(`[AUDITORÍA] ${new Date().toISOString()} - Cliente ${client.id} colgó sala ${data.roomId}`);
-  }
-}*/
