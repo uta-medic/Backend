@@ -46,19 +46,12 @@ export class FoundryUserService {
     > | null = null;
 
     try {
-      conversation = await openAIClient.conversations.create({
-        items: [
-          {
-            type: 'message',
-            role: 'user',
-            content: this.buildInput(message, location),
-          },
-        ],
-      });
+      conversation = await openAIClient.conversations.create();
 
       const response = await openAIClient.responses.create(
         {
           conversation: conversation.id,
+          input: this.buildInput(message, location),
         },
         {
           body: {
