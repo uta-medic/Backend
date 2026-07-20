@@ -28,7 +28,13 @@ export function configureApplication(
     origin: [frontendUrl],
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-Id'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Correlation-Id',
+      'X-Doctor-User-Id',
+      'X-Doctor-Id',
+    ],
     exposedHeaders: ['X-Correlation-Id'],
   });
   app.useGlobalPipes(

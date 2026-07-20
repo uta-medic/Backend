@@ -124,10 +124,14 @@ describe('Backend infrastructure (e2e)', () => {
       .options('/api/v1/health')
       .set('Origin', 'http://localhost:5173')
       .set('Access-Control-Request-Method', 'GET')
+      .set('Access-Control-Request-Headers', 'x-doctor-user-id')
       .expect(204);
 
     expect(response.headers['access-control-allow-origin']).toBe(
       'http://localhost:5173',
+    );
+    expect(response.headers['access-control-allow-headers']).toContain(
+      'X-Doctor-User-Id',
     );
   });
 
