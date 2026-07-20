@@ -30,10 +30,16 @@ export class DoctorAiService {
       context,
       dto.question,
     );
+    const answerWithPatientName = [
+      'Paciente: ' + context.patient.fullName + '.',
+      '',
+      answer,
+    ].join('\n');
 
     return {
       patientId: dto.patientId,
-      answer,
+      patientName: context.patient.fullName,
+      answer: answerWithPatientName,
       generatedAt: new Date().toISOString(),
       disclaimer:
         'Resultado orientativo sujeto a revision del medico responsable.',

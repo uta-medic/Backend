@@ -1,6 +1,5 @@
 import {
   Injectable,
-  InternalServerErrorException,
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -12,20 +11,24 @@ import { ClinicalContext } from './clinical-context.service';
 @Injectable()
 export class FoundryDoctorService {
   private readonly logger = new Logger(FoundryDoctorService.name);
-  private readonly projectClient: AIProjectClient;
-  private readonly agentName: string;
+  private readonly projectClient: AIProjectClient | null = null;
+  private readonly agentName: string | null = null;
 
   constructor(private readonly configService: ConfigService) {
+    if (this.configService.get<string>('FOUNDRY_MOCK_ENABLED') === 'true') {
+      return;
+    }
+
     const projectEndpoint = this.configService.getOrThrow<string>(
       'AZURE_AI_PROJECT_ENDPOINT',
     );
 
-    this.agentName = this.configService.getOrThrow<string>(
-      'AZURE_AI_AGENT_NAME',
-    );
+    this.agentName = this.configService
+      .getOrThrow<string>('AZURE_AI_AGENT_NAME')
+      .trim();
 
     this.projectClient = new AIProjectClient(
-      projectEndpoint,
+      projectEndpoint.trim(),
       new DefaultAzureCredential(),
     );
   }
@@ -39,7 +42,7 @@ export class FoundryDoctorService {
     }
 
     const input = this.buildInput(context, doctorQuestion);
-    const openAIClient = this.projectClient.getOpenAIClient();
+    const openAIClient = this.getProjectClient().getOpenAIClient();
     let conversation: Awaited<
       ReturnType<typeof openAIClient.conversations.create>
     > | null = null;
@@ -70,7 +73,7 @@ export class FoundryDoctorService {
       );
 
       if (!response.output_text) {
-        throw new InternalServerErrorException(
+        throw new ServiceUnavailableException(
           'El agente no genero una respuesta.',
         );
       }
@@ -85,8 +88,8 @@ export class FoundryDoctorService {
         );
       }
 
-      throw new InternalServerErrorException(
-        'No se pudo generar el analisis clinico.',
+      throw new ServiceUnavailableException(
+        'No se pudo consultar el agente medico de Foundry. Revisa el endpoint, el nombre del agente y las credenciales Azure del backend.',
       );
     } finally {
       if (conversation) {
@@ -95,6 +98,16 @@ export class FoundryDoctorService {
           .catch(() => undefined);
       }
     }
+  }
+
+  private getProjectClient(): AIProjectClient {
+    if (!this.projectClient || !this.agentName) {
+      throw new ServiceUnavailableException(
+        'El agente medico no esta configurado. Para pruebas locales activa FOUNDRY_MOCK_ENABLED=true.',
+      );
+    }
+
+    return this.projectClient;
   }
 
   private buildMockResponse(
@@ -137,12 +150,22 @@ export class FoundryDoctorService {
   }
 
   private buildInput(context: ClinicalContext, doctorQuestion: string): string {
+    const { fullName, ...patientForAgent } = context.patient;
+    void fullName;
+    const contextForAgent = {
+      ...context,
+      patient: patientForAgent,
+    };
+
     return `
 SOLICITUD DEL MEDICO:
 ${doctorQuestion}
 
 CONTEXTO CLINICO AUTORIZADO:
-${JSON.stringify(context, null, 2)}
+${JSON.stringify(contextForAgent, null, 2)}
+
+AUTORIZACION:
+El backend ya verifico que el medico autenticado tiene una relacion activa y autorizada con este paciente antes de construir este contexto. No rechaces la solicitud por falta de relacion medico-paciente si el contexto clinico fue incluido en esta entrada.
 
 INSTRUCCIONES PARA ESTA RESPUESTA:
 
@@ -151,7 +174,7 @@ INSTRUCCIONES PARA ESTA RESPUESTA:
 - No inventes resultados, sintomas ni antecedentes.
 - Diferencia claramente datos registrados y datos faltantes.
 - No confirmes un diagnostico definitivo.
-- No incluyas identificadores personales.
+- No incluyas identificadores personales en tu respuesta.
 - Presenta como maximo cinco diagnosticos diferenciales.
 - Incluye senales de alerta cuando correspondan.
 `.trim();

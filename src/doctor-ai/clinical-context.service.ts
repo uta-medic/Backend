@@ -9,6 +9,7 @@ import { SupabaseService } from '../database/supabase.service';
 export interface ClinicalContext {
   patient: {
     id: string;
+    fullName: string;
     approximateAge: number;
     sex: string;
     bloodType: string | null;
@@ -268,6 +269,7 @@ export class ClinicalContextService {
     return {
       patient: {
         id: patient.id,
+        fullName: patient.first_name + ' ' + patient.last_name,
         approximateAge: this.calculateAge(patient.birth_date),
         sex: patient.sex,
         bloodType: patient.blood_type,
