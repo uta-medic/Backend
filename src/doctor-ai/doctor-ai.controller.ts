@@ -31,8 +31,13 @@ export class DoctorAiController {
   async listPatients(
     @Req() request: AuthenticatedRequest,
     @Headers('x-doctor-user-id') devDoctorUserId?: string,
+    @Headers('x-doctor-id') devDoctorId?: string,
   ) {
-    const doctorUserId = this.getDoctorUserId(request, devDoctorUserId);
+    const doctorUserId = this.getDoctorUserId(
+      request,
+      devDoctorUserId,
+      devDoctorId,
+    );
 
     return this.doctorAiService.listPatients(doctorUserId);
   }
@@ -42,8 +47,13 @@ export class DoctorAiController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: AnalyzePatientDto,
     @Headers('x-doctor-user-id') devDoctorUserId?: string,
+    @Headers('x-doctor-id') devDoctorId?: string,
   ) {
-    const doctorUserId = this.getDoctorUserId(request, devDoctorUserId);
+    const doctorUserId = this.getDoctorUserId(
+      request,
+      devDoctorUserId,
+      devDoctorId,
+    );
 
     return this.doctorAiService.analyzePatient(doctorUserId, dto);
   }
@@ -51,6 +61,7 @@ export class DoctorAiController {
   private getDoctorUserId(
     request: AuthenticatedRequest,
     devDoctorUserId?: string,
+    devDoctorId?: string,
   ): string {
     const doctorUserId = request.user?.sub;
 
@@ -62,14 +73,16 @@ export class DoctorAiController {
       this.configService.get<string>('DEV_AUTH_DOCTOR_HEADER_ENABLED') ===
       'true';
 
-    if (devHeaderEnabled && devDoctorUserId) {
-      if (!this.isUuid(devDoctorUserId)) {
+    const devDoctorIdentity = devDoctorUserId ?? devDoctorId;
+
+    if (devHeaderEnabled && devDoctorIdentity) {
+      if (!this.isUuid(devDoctorIdentity)) {
         throw new BadRequestException(
-          'El header x-doctor-user-id debe ser un UUID valido.',
+          'El header x-doctor-user-id o x-doctor-id debe ser un UUID valido.',
         );
       }
 
-      return devDoctorUserId;
+      return devDoctorIdentity;
     }
 
     throw new UnauthorizedException('No se encontro el medico autenticado.');

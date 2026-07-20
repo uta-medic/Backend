@@ -4,7 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApplication } from './../src/configure-app';
-import { SqlService } from './../src/database/sql.service';
+import { SupabaseService } from './../src/database/supabase.service';
 import { FoundryDoctorService } from './../src/doctor-ai/foundry-doctor.service';
 
 describe('Backend infrastructure (e2e)', () => {
@@ -17,7 +17,7 @@ describe('Backend infrastructure (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(SqlService)
+      .overrideProvider(SupabaseService)
       .useValue({})
       .overrideProvider(FoundryDoctorService)
       .useValue({})

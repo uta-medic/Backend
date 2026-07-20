@@ -4,8 +4,10 @@ const DEFAULTS = {
   API_PREFIX: 'api/v1',
   FRONTEND_URL: 'http://localhost:5173',
   LOG_LEVEL: 'info',
-  DB_PORT: 1433,
-  AZURE_SQL_DATABASE_URL: '',
+  DB_CONNECT_RETRIES: 3,
+  SUPABASE_URL: '',
+  SUPABASE_ANON_KEY: '',
+  SUPABASE_SERVICE_ROLE_KEY: '',
   FOUNDRY_PROJECT_ENDPOINT: '',
   UTAMEDIC_USER_AGENT_ID: '',
   UTAMEDIC_DOCTOR_AGENT_ID: '',
@@ -46,6 +48,26 @@ function validateFrontendUrl(value: string): string {
   return value;
 }
 
+function parseBoolean(
+  value: string | undefined,
+  fallback: boolean,
+  name: string,
+): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  if (value === 'false') {
+    return false;
+  }
+
+  throw new Error(`${name} must be true or false`);
+}
+
 export function validateEnvironment(environment: Environment) {
   const nodeEnv = environment.NODE_ENV ?? DEFAULTS.NODE_ENV;
   if (!['development', 'test', 'production'].includes(nodeEnv)) {
@@ -66,9 +88,23 @@ export function validateEnvironment(environment: Environment) {
       environment.FRONTEND_URL ?? DEFAULTS.FRONTEND_URL,
     ),
     LOG_LEVEL: environment.LOG_LEVEL ?? DEFAULTS.LOG_LEVEL,
-    DB_PORT: parseInteger(environment.DB_PORT, DEFAULTS.DB_PORT, 'DB_PORT', 1),
-    AZURE_SQL_DATABASE_URL:
-      environment.AZURE_SQL_DATABASE_URL ?? DEFAULTS.AZURE_SQL_DATABASE_URL,
+    DB_REQUIRED: parseBoolean(
+      environment.DB_REQUIRED,
+      nodeEnv === 'production',
+      'DB_REQUIRED',
+    ),
+    DB_CONNECT_RETRIES: parseInteger(
+      environment.DB_CONNECT_RETRIES,
+      DEFAULTS.DB_CONNECT_RETRIES,
+      'DB_CONNECT_RETRIES',
+      1,
+    ),
+    SUPABASE_URL: environment.SUPABASE_URL ?? DEFAULTS.SUPABASE_URL,
+    SUPABASE_ANON_KEY:
+      environment.SUPABASE_ANON_KEY ?? DEFAULTS.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY:
+      environment.SUPABASE_SERVICE_ROLE_KEY ??
+      DEFAULTS.SUPABASE_SERVICE_ROLE_KEY,
     FOUNDRY_PROJECT_ENDPOINT:
       environment.FOUNDRY_PROJECT_ENDPOINT ?? DEFAULTS.FOUNDRY_PROJECT_ENDPOINT,
     UTAMEDIC_USER_AGENT_ID:

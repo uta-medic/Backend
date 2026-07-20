@@ -4,7 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { validateEnvironment } from './config/environment.config';
-import { SqlModule } from './database/sql.module';
+import { DatabaseModule } from './database/database.module';
 import { DoctorAiModule } from './doctor-ai/doctor-ai.module';
 import { HealthModule } from './health/health.module';
 
@@ -15,7 +15,7 @@ import { HealthModule } from './health/health.module';
       isGlobal: true,
       validate: validateEnvironment,
     }),
-    SqlModule,
+    DatabaseModule,
     DoctorAiModule,
     HealthModule,
   ],
