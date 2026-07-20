@@ -118,9 +118,15 @@ export class FoundryDoctorService {
   }
 
   private isAzureCredentialError(error: unknown): boolean {
+    const cause =
+      error instanceof Error && error.cause instanceof Error
+        ? error.cause.message
+        : error instanceof Error && typeof error.cause === 'string'
+          ? error.cause
+          : '';
     const text =
       error instanceof Error
-        ? `${error.name} ${error.message} ${String(error.cause ?? '')}`
+        ? `${error.name} ${error.message} ${cause}`
         : String(error);
 
     return (
