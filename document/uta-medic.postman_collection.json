@@ -188,12 +188,68 @@
         "description": "Caso de prueba negativo. Debe responder 400 porque forbidNonWhitelisted esta activo."
       },
       "response": []
+    },
+    {
+      "name": "User AI - Chat",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Estoy cerca de Sopocachi y necesito encontrar un hospital cercano.\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/user-ai/chat",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "user-ai",
+            "chat"
+          ]
+        },
+        "description": "Consulta ciudadana al agente agenteUtamedic. No requiere patientId, doctorId ni conexion a Supabase desde el backend."
+      },
+      "response": []
+    },
+    {
+      "name": "User AI - Chat - Invalid Body",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/user-ai/chat",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "user-ai",
+            "chat"
+          ]
+        },
+        "description": "Caso negativo. Debe responder 400 porque falta message, query o consulta."
+      },
+      "response": []
     }
   ],
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000",
+      "value": "http://localhost:3000/api/v1",
       "type": "string"
     },
     {

@@ -3,7 +3,7 @@
 Base URL local:
 
 ```text
-http://localhost:3000
+http://localhost:3000/api/v1
 ```
 
 Si usas otro puerto, cambia la variable `baseUrl` en Postman.
@@ -11,9 +11,10 @@ Si usas otro puerto, cambia la variable `baseUrl` en Postman.
 ## Cambios Implementados
 
 - Se activo `ConfigModule` global.
-- Se agrego conexion global a Azure SQL con `SqlService`.
+- Se agrego conexion global a Supabase con `SupabaseService`.
 - Se agrego `GET /doctor-ai/patients` para listar pacientes asignados al medico.
 - Se agrego `POST /doctor-ai/analyze` para analizar un paciente con contexto clinico autorizado.
+- Se agrego `POST /user-ai/chat` para consultas ciudadanas con el agente `agenteUtamedic`.
 - Se agrego modo temporal de pruebas con header `x-doctor-user-id`.
 - Se agrego modo mock de Foundry con `FOUNDRY_MOCK_ENABLED`.
 - Se actualizo la llamada real a Foundry para usar `body.agent_reference.type` y `body.agent_reference.name`.
@@ -51,17 +52,17 @@ No necesitas enviar `Authorization: Bearer <token>` mientras uses este modo.
 
 ### Obtener doctorUserId
 
-Ejecuta esta consulta en Azure SQL:
+Ejecuta esta consulta en Supabase SQL Editor:
 
 ```sql
 SELECT
-    doctor.user_id AS doctorUserId,
-    doctor.id AS doctorId,
+    doctor.user_id AS "doctorUserId",
+    doctor.id AS "doctorId",
     doctor.first_name,
     doctor.last_name,
     users.email
-FROM dbo.Doctors AS doctor
-INNER JOIN dbo.Users AS users
+FROM doctors AS doctor
+INNER JOIN users
     ON users.id = doctor.user_id
 ORDER BY doctor.last_name, doctor.first_name;
 ```
@@ -94,9 +95,16 @@ El payload real hacia Foundry usa:
 body: {
   agent_reference: {
     type: 'agent_reference',
-    name: AZURE_AI_AGENT_NAME
+    name: AZURE_AI_DOCTOR_AGENT_NAME | AZURE_AI_USER_AGENT_NAME
   }
 }
+```
+
+Agentes configurados:
+
+```env
+AZURE_AI_DOCTOR_AGENT_NAME=agenteMedico
+AZURE_AI_USER_AGENT_NAME=agenteUtamedic
 ```
 
 ## GET /
@@ -122,7 +130,7 @@ Lista los pacientes activos asignados al medico autenticado. Este endpoint sirve
 ### Request Para Pruebas Locales
 
 ```http
-GET http://localhost:3000/doctor-ai/patients
+GET http://localhost:3000/api/v1/doctor-ai/patients
 x-doctor-user-id: <doctorUserId>
 ```
 
@@ -177,12 +185,12 @@ Con `x-doctor-user-id` mal escrito:
 
 ## POST /doctor-ai/analyze
 
-Genera un analisis clinico orientativo para un paciente usando contexto autorizado desde SQL y el agente de Foundry.
+Genera un analisis clinico orientativo para un paciente usando contexto autorizado desde Supabase y el agente medico de Foundry.
 
 ### Request Para Pruebas Locales
 
 ```http
-POST http://localhost:3000/doctor-ai/analyze
+POST http://localhost:3000/api/v1/doctor-ai/analyze
 Content-Type: application/json
 x-doctor-user-id: <doctorUserId>
 ```
@@ -274,23 +282,133 @@ Error general de Foundry:
 
 ```json
 {
-  "message": "No se pudo generar el analisis clinico.",
-  "error": "Internal Server Error",
-  "statusCode": 500
+  "message": "No se pudo consultar el agente medico de Foundry. Revisa el endpoint, el nombre del agente y las credenciales Azure del backend.",
+  "error": "Service Unavailable",
+  "statusCode": 503
+}
+```
+
+## POST /user-ai/chat
+
+Endpoint ciudadano para consultas generales de usuarios/pacientes. Usa el agente de Foundry `agenteUtamedic`.
+
+Este endpoint no consulta Supabase ni otra base de datos desde el backend. Solo envia la consulta del usuario al agente de usuarios. Si el agente tiene herramientas conectadas en Foundry, esas herramientas se gestionan desde Foundry.
+
+### Request
+
+```http
+POST http://localhost:3000/api/v1/user-ai/chat
+Content-Type: application/json
+```
+
+### Body
+
+Puedes enviar cualquiera de estos campos:
+
+```json
+{
+  "message": "Que hospital cercano puedo buscar?",
+  "location": "Sopocachi, La Paz, Bolivia"
+}
+```
+
+Tambien acepta:
+
+```json
+{
+  "query": "Busco un hospital cercano con emergencias"
+}
+```
+
+o:
+
+```json
+{
+  "consulta": "Necesito encontrar un centro medico cerca"
+}
+```
+
+### Response 200
+
+```json
+{
+  "answer": "Texto generado por el agente ciudadano...",
+  "generatedAt": "2026-07-20T18:30:00.000Z",
+  "disclaimer": "Orientacion general. No reemplaza una evaluacion medica profesional."
+}
+```
+
+### Validaciones
+
+`message`, `query` o `consulta`
+: Debe ser texto entre 2 y 1000 caracteres.
+
+`location`
+: Opcional. Texto entre 2 y 300 caracteres. Recomendado para busquedas de centros cercanos.
+
+Campos extra
+: Se rechazan porque `forbidNonWhitelisted` esta activo.
+
+Base de datos
+: No requiere `patientId`, `doctorId`, header medico ni conexion a Supabase.
+
+Busqueda web
+: Para devolver centros reales, el agente `agenteUtamedic` debe tener la herramienta de busqueda web habilitada en Azure AI Foundry. Si la herramienta no esta habilitada o no devuelve datos confiables, el agente debe pedir mas ubicacion o responder que no puede confirmar centros reales.
+
+### Errores
+
+Body sin consulta:
+
+```json
+{
+  "message": "Debes enviar message, query o consulta con la pregunta del usuario.",
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+Campo demasiado corto:
+
+```json
+{
+  "message": ["message must be longer than or equal to 2 characters"],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+Credenciales Azure faltantes con `FOUNDRY_MOCK_ENABLED=false`:
+
+```json
+{
+  "message": "No hay credenciales Azure disponibles para consultar el agente de usuarios.",
+  "error": "Service Unavailable",
+  "statusCode": 503
+}
+```
+
+Error general de Foundry:
+
+```json
+{
+  "message": "No se pudo consultar el agente de usuarios. Revisa AZURE_AI_USER_AGENT_NAME, el endpoint y las credenciales Azure.",
+  "error": "Service Unavailable",
+  "statusCode": 503
 }
 ```
 
 ## Variables .env
 
 ```env
-DB_SERVER=
-DB_DATABASE=
-DB_USER=
-DB_PASSWORD=
-DB_PORT=1433
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+DB_REQUIRED=false
+DB_CONNECT_RETRIES=3
 
 AZURE_AI_PROJECT_ENDPOINT=
-AZURE_AI_AGENT_NAME=
+AZURE_AI_DOCTOR_AGENT_NAME=agenteMedico
+AZURE_AI_USER_AGENT_NAME=agenteUtamedic
 PORT=3000
 
 DEV_AUTH_DOCTOR_HEADER_ENABLED=true
@@ -411,7 +529,65 @@ Esperado:
 }
 ```
 
-### Caso 6 - Header De Medico Invalido
+### Caso 6 - Consulta Ciudadana Con Agente Real
+
+Precondicion:
+
+```env
+FOUNDRY_MOCK_ENABLED=false
+AZURE_AI_USER_AGENT_NAME=agenteUtamedic
+```
+
+Request:
+
+```http
+POST /user-ai/chat
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "message": "Necesito encontrar un hospital cercano.",
+  "location": "Sopocachi, La Paz, Bolivia"
+}
+```
+
+Esperado:
+
+```json
+{
+  "answer": "respuesta del agente ciudadano",
+  "generatedAt": "fecha ISO",
+  "disclaimer": "Orientacion general. No reemplaza una evaluacion medica profesional."
+}
+```
+
+### Caso 7 - Consulta Ciudadana Sin Body Valido
+
+Request:
+
+```http
+POST /user-ai/chat
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{}
+```
+
+Esperado:
+
+```json
+{
+  "statusCode": 400
+}
+```
+
+### Caso 8 - Header De Medico Invalido
 
 Request:
 
@@ -428,7 +604,7 @@ Esperado:
 }
 ```
 
-### Caso 7 - Body Invalido
+### Caso 9 - Body Invalido
 
 Request:
 
@@ -464,7 +640,7 @@ document/uta-medic.postman_collection.json
 
 2. Configura variables:
 
-- `baseUrl`: `http://localhost:3000`
+- `baseUrl`: `http://localhost:3000/api/v1`
 - `doctorUserId`: valor real de `Doctors.user_id`
 - `patientId`: se llena despues de llamar `GET /doctor-ai/patients`
 
@@ -475,3 +651,5 @@ document/uta-medic.postman_collection.json
 5. Copia un `patientId` de la respuesta.
 
 6. Ejecuta `Doctor AI - Analyze Patient`.
+
+7. Ejecuta `User AI - Chat` para probar el agente ciudadano.

@@ -7,6 +7,7 @@ import { validateEnvironment } from './config/environment.config';
 import { DatabaseModule } from './database/database.module';
 import { DoctorAiModule } from './doctor-ai/doctor-ai.module';
 import { HealthModule } from './health/health.module';
+import { UserAiModule } from './user-ai/user-ai.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { HealthModule } from './health/health.module';
     DatabaseModule,
     DoctorAiModule,
     HealthModule,
+    UserAiModule,
   ],
   controllers: [AppController],
   providers: [AppService, AllExceptionsFilter],

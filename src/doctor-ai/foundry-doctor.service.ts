@@ -23,9 +23,10 @@ export class FoundryDoctorService {
       'AZURE_AI_PROJECT_ENDPOINT',
     );
 
-    this.agentName = this.configService
-      .getOrThrow<string>('AZURE_AI_AGENT_NAME')
-      .trim();
+    this.agentName = (
+      this.configService.get<string>('AZURE_AI_DOCTOR_AGENT_NAME') ??
+      this.configService.getOrThrow<string>('AZURE_AI_AGENT_NAME')
+    ).trim();
 
     this.projectClient = new AIProjectClient(
       projectEndpoint.trim(),
