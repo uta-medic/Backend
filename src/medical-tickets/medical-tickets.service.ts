@@ -247,6 +247,13 @@ export class MedicalTicketsService {
       ticketDate: ticket.ticketDate,
     };
   }
+  async findAll(): Promise<MedicalTicket[]> {
+    return this.ticketsRepository.find({
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 
   private compareQueueTickets(
     first: MedicalTicket,

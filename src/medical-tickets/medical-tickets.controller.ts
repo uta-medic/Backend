@@ -97,6 +97,18 @@ export class MedicalTicketsController {
   getPosition(@Param('id') id: string): Promise<MedicalTicketPosition> {
     return this.medicalTicketsService.getPosition(id);
   }
+  @Get()
+  @ApiOperation({
+    summary: 'Obtener todas las fichas médicas',
+  })
+  @ApiOkResponse({
+    description: 'Listado de fichas médicas registradas',
+    type: MedicalTicket,
+    isArray: true,
+  })
+  findAll(): Promise<MedicalTicket[]> {
+    return this.medicalTicketsService.findAll();
+  }
 
   @Get(':id')
   @ApiOperation({
