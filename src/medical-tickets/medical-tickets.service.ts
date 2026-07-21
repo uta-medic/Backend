@@ -1,31 +1,318 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 
+import { Appointment } from '../appointments/entities/appointment.entity';
+import { TriageAssessment } from '../triage-assessments/entities/triage-assessment.entity';
+import { TriageAssessmentStatus } from '../triage-assessments/enums/triage-assessment-status.enum';
+import { TriagePriority } from '../triage-assessments/enums/triage-priority.enum';
 import { CreateMedicalTicketDto } from './dto/create-medical-ticket.dto';
-import { UpdateMedicalTicketDto } from './dto/update-medical-ticket.dto';
+import { MedicalTicketQueueQueryDto } from './dto/medical-ticket-queue-query.dto';
+import { MedicalTicket } from './entities/medical-ticket.entity';
+import { MedicalTicketStatus } from './enums/medical-ticket-status.enum';
+import { PriorityPatientType } from './enums/priority-patient-type.enum';
+
+export interface MedicalTicketPosition {
+  ticketId: string;
+  ticketNumber: string;
+  position: number;
+  totalWaiting: number;
+  hospitalId: string;
+  specialtyId: string;
+  ticketDate: string;
+}
 
 @Injectable()
 export class MedicalTicketsService {
-  create(createMedicalTicketDto: CreateMedicalTicketDto): string {
-    void createMedicalTicketDto;
+  constructor(
+    @InjectRepository(MedicalTicket)
+    private readonly ticketsRepository: Repository<MedicalTicket>,
 
-    return 'Esta acción genera una nueva ficha médica';
+    @InjectRepository(Appointment)
+    private readonly appointmentsRepository: Repository<Appointment>,
+
+    @InjectRepository(TriageAssessment)
+    private readonly triageRepository: Repository<TriageAssessment>,
+
+    private readonly dataSource: DataSource,
+  ) {}
+
+  async create(createDto: CreateMedicalTicketDto): Promise<MedicalTicket> {
+    return this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+      const triageRepository = manager.getRepository(TriageAssessment);
+
+      const appointmentRepository = manager.getRepository(Appointment);
+
+      const ticketRepository = manager.getRepository(MedicalTicket);
+
+      const assessment = await triageRepository.findOne({
+        where: {
+          id: createDto.triageAssessmentId,
+        },
+      });
+
+      if (!assessment) {
+        throw new NotFoundException('No se encontró la evaluación de triaje');
+      }
+
+      if (assessment.status !== TriageAssessmentStatus.REVIEWED) {
+        throw new BadRequestException(
+          'La evaluación debe ser revisada antes de generar la ficha',
+        );
+      }
+
+      if (!assessment.assignedPriority) {
+        throw new BadRequestException(
+          'La evaluación no tiene una prioridad clínica asignada',
+        );
+      }
+
+      const appointment = await appointmentRepository.findOne({
+        where: {
+          id: assessment.appointmentId,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException(
+          'No se encontró la cita relacionada con la evaluación',
+        );
+      }
+
+      const existingTicket = await ticketRepository.findOne({
+        where: [
+          {
+            appointmentId: appointment.id,
+          },
+          {
+            triageAssessmentId: assessment.id,
+          },
+        ],
+      });
+
+      if (existingTicket) {
+        throw new ConflictException(
+          'La cita ya tiene una ficha médica generada',
+        );
+      }
+
+      const ticketDate = this.toDateOnly(appointment.scheduledAt);
+
+      const sequenceResult = await ticketRepository
+        .createQueryBuilder('ticket')
+        .select('MAX(ticket.dailySequence)', 'maxSequence')
+        .where('ticket.ticketDate = :ticketDate', {
+          ticketDate,
+        })
+        .andWhere('ticket.hospitalId = :hospitalId', {
+          hospitalId: appointment.hospitalId,
+        })
+        .andWhere('ticket.specialtyId = :specialtyId', {
+          specialtyId: appointment.specialtyId,
+        })
+        .getRawOne<{
+          maxSequence: number | string | null;
+        }>();
+
+      const dailySequence = Number(sequenceResult?.maxSequence ?? 0) + 1;
+
+      const priorityPatientType =
+        createDto.priorityPatientType ?? PriorityPatientType.NONE;
+
+      const ticket = ticketRepository.create({
+        appointmentId: appointment.id,
+        triageAssessmentId: assessment.id,
+        hospitalId: appointment.hospitalId,
+        specialtyId: appointment.specialtyId,
+        ticketDate,
+        dailySequence,
+        ticketNumber: this.buildTicketNumber(
+          ticketDate,
+          appointment.hospitalId,
+          appointment.specialtyId,
+          dailySequence,
+        ),
+        triagePriority: assessment.assignedPriority,
+        priorityPatientType,
+        hasPriorityCare: priorityPatientType !== PriorityPatientType.NONE,
+        status: MedicalTicketStatus.READY_FOR_CHECK_IN,
+        checkedInAt: null,
+        calledAt: null,
+        serviceStartedAt: null,
+        completedAt: null,
+      });
+
+      return ticketRepository.save(ticket);
+    });
   }
 
-  findAll(): string {
-    return 'Esta acción devuelve todas las fichas médicas';
+  async findOne(id: string): Promise<MedicalTicket> {
+    const ticket = await this.ticketsRepository.findOne({
+      where: { id },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('No se encontró la ficha médica');
+    }
+
+    return ticket;
   }
 
-  findOne(id: number): string {
-    return `Esta acción devuelve la ficha médica ${id}`;
+  async checkIn(id: string): Promise<MedicalTicket> {
+    const ticket = await this.findOne(id);
+
+    if (ticket.status === MedicalTicketStatus.WAITING) {
+      throw new BadRequestException(
+        'El paciente ya realizó su registro de llegada',
+      );
+    }
+
+    if (ticket.status !== MedicalTicketStatus.READY_FOR_CHECK_IN) {
+      throw new BadRequestException(
+        'La ficha no está disponible para realizar el registro de llegada',
+      );
+    }
+
+    ticket.status = MedicalTicketStatus.WAITING;
+    ticket.checkedInAt = new Date();
+
+    return this.ticketsRepository.save(ticket);
   }
 
-  update(id: number, updateMedicalTicketDto: UpdateMedicalTicketDto): string {
-    void updateMedicalTicketDto;
+  async findQueue(query: MedicalTicketQueueQueryDto): Promise<MedicalTicket[]> {
+    const ticketDate = query.ticketDate ?? this.toDateOnly(new Date());
 
-    return `Esta acción actualiza la ficha médica ${id}`;
+    const tickets = await this.ticketsRepository
+      .createQueryBuilder('ticket')
+      .where('ticket.hospitalId = :hospitalId', {
+        hospitalId: query.hospitalId,
+      })
+      .andWhere('ticket.specialtyId = :specialtyId', {
+        specialtyId: query.specialtyId,
+      })
+      .andWhere('CONVERT(varchar(10), ticket.ticketDate, 23) = :ticketDate', {
+        ticketDate,
+      })
+      .andWhere('ticket.status = :status', {
+        status: MedicalTicketStatus.WAITING,
+      })
+      .getMany();
+
+    return tickets.sort((first, second) =>
+      this.compareQueueTickets(first, second),
+    );
   }
 
-  remove(id: number): string {
-    return `Esta acción elimina la ficha médica ${id}`;
+  async getPosition(id: string): Promise<MedicalTicketPosition> {
+    const ticket = await this.findOne(id);
+
+    if (ticket.status === MedicalTicketStatus.READY_FOR_CHECK_IN) {
+      throw new BadRequestException(
+        'El paciente debe realizar el check-in antes de consultar su posición',
+      );
+    }
+
+    if (ticket.status !== MedicalTicketStatus.WAITING) {
+      throw new BadRequestException(
+        'La ficha no se encuentra actualmente en la cola de espera',
+      );
+    }
+
+    const queue = await this.findQueue({
+      hospitalId: ticket.hospitalId,
+      specialtyId: ticket.specialtyId,
+      ticketDate: ticket.ticketDate,
+    });
+
+    const index = queue.findIndex(
+      (queueTicket) => queueTicket.id === ticket.id,
+    );
+
+    if (index === -1) {
+      throw new NotFoundException('La ficha no se encontró en la cola activa');
+    }
+
+    return {
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber,
+      position: index + 1,
+      totalWaiting: queue.length,
+      hospitalId: ticket.hospitalId,
+      specialtyId: ticket.specialtyId,
+      ticketDate: ticket.ticketDate,
+    };
+  }
+
+  private compareQueueTickets(
+    first: MedicalTicket,
+    second: MedicalTicket,
+  ): number {
+    const priorityDifference =
+      this.getPriorityWeight(second.triagePriority) -
+      this.getPriorityWeight(first.triagePriority);
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    if (first.hasPriorityCare !== second.hasPriorityCare) {
+      return first.hasPriorityCare ? -1 : 1;
+    }
+
+    const firstCheckIn =
+      first.checkedInAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+
+    const secondCheckIn =
+      second.checkedInAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+
+    if (firstCheckIn !== secondCheckIn) {
+      return firstCheckIn - secondCheckIn;
+    }
+
+    return first.dailySequence - second.dailySequence;
+  }
+
+  private getPriorityWeight(priority: TriagePriority): number {
+    const weights: Record<TriagePriority, number> = {
+      [TriagePriority.LOW]: 1,
+      [TriagePriority.MEDIUM]: 2,
+      [TriagePriority.MEDIUM_HIGH]: 3,
+      [TriagePriority.HIGH]: 4,
+      [TriagePriority.VERY_HIGH]: 5,
+    };
+
+    return weights[priority];
+  }
+
+  private toDateOnly(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  private buildTicketNumber(
+    ticketDate: string,
+    hospitalId: string,
+    specialtyId: string,
+    dailySequence: number,
+  ): string {
+    const datePart = ticketDate.replaceAll('-', '');
+
+    const hospitalPart = hospitalId
+      .replaceAll('-', '')
+      .slice(0, 8)
+      .toUpperCase();
+
+    const specialtyPart = specialtyId
+      .replaceAll('-', '')
+      .slice(0, 8)
+      .toUpperCase();
+
+    const sequencePart = String(dailySequence).padStart(4, '0');
+
+    return `F-${datePart}-${hospitalPart}-${specialtyPart}-${sequencePart}`;
   }
 }

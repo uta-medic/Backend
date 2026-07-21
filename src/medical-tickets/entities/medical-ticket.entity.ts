@@ -16,9 +16,16 @@ import { PriorityPatientType } from '../enums/priority-patient-type.enum';
 @Index('UQ_medical_tickets_appointment', ['appointmentId'], {
   unique: true,
 })
-@Index('UQ_medical_tickets_number_date', ['ticketDate', 'dailySequence'], {
+@Index('UQ_medical_tickets_triage', ['triageAssessmentId'], {
   unique: true,
 })
+@Index(
+  'UQ_medical_tickets_daily_sequence',
+  ['ticketDate', 'hospitalId', 'specialtyId', 'dailySequence'],
+  {
+    unique: true,
+  },
+)
 export class MedicalTicket {
   @ApiProperty({
     description: 'Identificador único de la ficha médica',
@@ -43,8 +50,24 @@ export class MedicalTicket {
   triageAssessmentId!: string;
 
   @ApiProperty({
+    description: 'Identificador del centro médico',
+  })
+  @Column({
+    type: 'uniqueidentifier',
+  })
+  hospitalId!: string;
+
+  @ApiProperty({
+    description: 'Identificador de la especialidad',
+  })
+  @Column({
+    type: 'uniqueidentifier',
+  })
+  specialtyId!: string;
+
+  @ApiProperty({
     description: 'Número visible de la ficha',
-    example: 'MED-GEN-001',
+    example: 'F-20260721-001',
   })
   @Column({
     type: 'nvarchar',
@@ -54,7 +77,7 @@ export class MedicalTicket {
   ticketNumber!: string;
 
   @ApiProperty({
-    description: 'Número secuencial asignado durante el día',
+    description: 'Número secuencial de la ficha durante el día',
     example: 1,
   })
   @Column({
@@ -64,7 +87,7 @@ export class MedicalTicket {
 
   @ApiProperty({
     description: 'Fecha operativa de la ficha',
-    example: '2026-07-20',
+    example: '2026-07-21',
   })
   @Column({
     type: 'date',
@@ -72,9 +95,8 @@ export class MedicalTicket {
   ticketDate!: string;
 
   @ApiProperty({
-    description: 'Prioridad clínica asignada por el encargado médico',
+    description: 'Prioridad clínica asignada durante el triaje',
     enum: TriagePriority,
-    example: TriagePriority.HIGH,
   })
   @Column({
     type: 'nvarchar',
@@ -83,9 +105,8 @@ export class MedicalTicket {
   triagePriority!: TriagePriority;
 
   @ApiProperty({
-    description: 'Tipo de atención preferente del paciente',
+    description: 'Tipo de atención preferente',
     enum: PriorityPatientType,
-    example: PriorityPatientType.NONE,
   })
   @Column({
     type: 'nvarchar',
@@ -95,7 +116,7 @@ export class MedicalTicket {
   priorityPatientType!: PriorityPatientType;
 
   @ApiProperty({
-    description: 'Indica si el paciente tiene derecho a atención preferente',
+    description: 'Indica si el paciente tiene atención preferente',
     example: false,
   })
   @Column({
@@ -105,9 +126,8 @@ export class MedicalTicket {
   hasPriorityCare!: boolean;
 
   @ApiProperty({
-    description: 'Estado actual de la ficha médica',
+    description: 'Estado actual de la ficha',
     enum: MedicalTicketStatus,
-    example: MedicalTicketStatus.READY_FOR_CHECK_IN,
   })
   @Column({
     type: 'nvarchar',
@@ -156,17 +176,11 @@ export class MedicalTicket {
   })
   completedAt!: Date | null;
 
-  @ApiProperty({
-    description: 'Fecha de creación de la ficha',
-  })
   @CreateDateColumn({
     type: 'datetime2',
   })
   createdAt!: Date;
 
-  @ApiProperty({
-    description: 'Fecha de la última actualización de la ficha',
-  })
   @UpdateDateColumn({
     type: 'datetime2',
   })
