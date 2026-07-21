@@ -422,7 +422,7 @@ FOUNDRY_MOCK_ENABLED=false
 Request:
 
 ```http
-GET / 
+GET /
 ```
 
 Esperado:
