@@ -135,6 +135,19 @@ describe('Backend infrastructure (e2e)', () => {
     );
   });
 
+  it('allows the deployed Vercel frontend origin', async () => {
+    const response = await request(app.getHttpServer())
+      .options('/api/v1/health')
+      .set('Origin', 'https://uta-medic.vercel.app')
+      .set('Access-Control-Request-Method', 'GET')
+      .expect(204);
+
+    expect(response.headers['access-control-allow-origin']).toBe(
+      'https://uta-medic.vercel.app',
+    );
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+  });
+
   it('does not authorize an unconfigured frontend origin', async () => {
     const response = await request(app.getHttpServer())
       .options('/api/v1/health')

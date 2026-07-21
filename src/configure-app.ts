@@ -9,6 +9,8 @@ interface ApplicationOptions {
   enableSwagger?: boolean;
 }
 
+const DEPLOYED_FRONTEND_ORIGIN = 'https://uta-medic.vercel.app';
+
 export function configureApplication(
   app: INestApplication,
   options: ApplicationOptions = {},
@@ -25,7 +27,7 @@ export function configureApplication(
   app.setGlobalPrefix(prefix);
   app.use(helmet());
   app.enableCors({
-    origin: [frontendUrl],
+    origin: [...new Set([frontendUrl, DEPLOYED_FRONTEND_ORIGIN])],
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
