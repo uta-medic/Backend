@@ -6,6 +6,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { createDatabaseConfig } from './config/database.config';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { TriageAssessmentsModule } from './triage-assessments/triage-assessments.module';
+import { MedicalTicketsModule } from './medical-tickets/medical-tickets.module';
 
 @Module({
   imports: [
@@ -22,6 +24,10 @@ import { AppointmentsModule } from './appointments/appointments.module';
     }),
 
     AppointmentsModule,
+
+    TriageAssessmentsModule,
+
+    MedicalTicketsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

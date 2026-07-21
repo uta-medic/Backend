@@ -4,6 +4,8 @@ import { DataSource } from 'typeorm';
 
 import { Appointment } from '../appointments/entities/appointment.entity';
 
+import { TriageAssessment } from '../triage-assessments/entities/triage-assessment.entity';
+
 function parseBoolean(
   value: string | undefined,
   defaultValue: boolean,
@@ -25,7 +27,7 @@ export default new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
 
-  entities: [Appointment],
+  entities: [Appointment, TriageAssessment],
 
   migrations: ['src/migrations/*.ts'],
 
