@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -84,16 +75,7 @@ export class TriageAssessmentsController {
   @ApiNotFoundResponse({
     description: 'No se encontró la evaluación',
   })
-  findOne(
-    @Param(
-      'id',
-      new ParseUUIDPipe({
-        version: '4',
-        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-      }),
-    )
-    id: string,
-  ): Promise<TriageAssessment> {
+  findOne(@Param('id') id: string): Promise<TriageAssessment> {
     return this.triageService.findOne(id);
   }
 
@@ -112,14 +94,7 @@ export class TriageAssessmentsController {
     description: 'No se encontró la evaluación',
   })
   review(
-    @Param(
-      'id',
-      new ParseUUIDPipe({
-        version: '4',
-        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-      }),
-    )
-    id: string,
+    @Param('id') id: string,
     @Body() reviewDto: ReviewTriageAssessmentDto,
   ): Promise<TriageAssessment> {
     return this.triageService.review(id, reviewDto);

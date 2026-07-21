@@ -3,7 +3,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
@@ -16,23 +16,26 @@ export class ReviewTriageAssessmentDto {
     example: TriagePriority.HIGH,
   })
   @IsEnum(TriagePriority, {
-    message: 'La prioridad debe ser leve, media, media-alta, alta o muy alta',
+    message: 'La prioridad debe ser low, medium, medium_high, high o very_high',
   })
-  assignedPriority: TriagePriority;
+  assignedPriority!: TriagePriority;
 
   @ApiProperty({
     description: 'Identificador del usuario médico que realizó la revisión',
     example: '55555555-5555-4555-8555-555555555555',
   })
-  @IsUUID('4', {
-    message: 'El identificador del encargado médico debe ser un UUID válido',
-  })
-  reviewedByUserId: string;
+  @Matches(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    {
+      message:
+        'El identificador del encargado médico debe tener un formato GUID válido',
+    },
+  )
+  reviewedByUserId!: string;
 
   @ApiPropertyOptional({
-    description: 'Observaciones del encargado médico',
-    example:
-      'El paciente requiere atención prioritaria por la intensidad de los síntomas',
+    description: 'Observaciones realizadas durante la revisión médica',
+    example: 'Se asigna prioridad alta después de la revisión médica',
     maxLength: 1000,
   })
   @IsOptional()
