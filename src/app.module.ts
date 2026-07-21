@@ -4,6 +4,7 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { GABO_DATABASE_CONNECTION } from './config/database.constants';
 import { createDatabaseConfig } from './config/database.config';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { TriageAssessmentsModule } from './triage-assessments/triage-assessments.module';
@@ -17,6 +18,7 @@ import { MedicalTicketsModule } from './medical-tickets/medical-tickets.module';
     }),
 
     TypeOrmModule.forRootAsync({
+      name: GABO_DATABASE_CONNECTION,
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions =>

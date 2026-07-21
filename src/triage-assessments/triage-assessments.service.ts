@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Appointment } from '../appointments/entities/appointment.entity';
+import { GABO_DATABASE_CONNECTION } from '../config/database.constants';
 import { CreateTriageAssessmentDto } from './dto/create-triage-assessment.dto';
 import { ReviewTriageAssessmentDto } from './dto/review-triage-assessment.dto';
 import { TriageAssessment } from './entities/triage-assessment.entity';
@@ -16,10 +17,10 @@ import { TriageAssessmentStatus } from './enums/triage-assessment-status.enum';
 @Injectable()
 export class TriageAssessmentsService {
   constructor(
-    @InjectRepository(TriageAssessment)
+    @InjectRepository(TriageAssessment, GABO_DATABASE_CONNECTION)
     private readonly triageRepository: Repository<TriageAssessment>,
 
-    @InjectRepository(Appointment)
+    @InjectRepository(Appointment, GABO_DATABASE_CONNECTION)
     private readonly appointmentsRepository: Repository<Appointment>,
   ) {}
 

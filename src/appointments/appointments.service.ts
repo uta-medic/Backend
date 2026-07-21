@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { GABO_DATABASE_CONNECTION } from '../config/database.constants';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { Appointment } from './entities/appointment.entity';
@@ -14,7 +15,7 @@ import { Appointment } from './entities/appointment.entity';
 @Injectable()
 export class AppointmentsService {
   constructor(
-    @InjectRepository(Appointment)
+    @InjectRepository(Appointment, GABO_DATABASE_CONNECTION)
     private readonly appointmentsRepository: Repository<Appointment>,
   ) {}
 

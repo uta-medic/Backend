@@ -4,10 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { Appointment } from '../appointments/entities/appointment.entity';
+import { GABO_DATABASE_CONNECTION } from '../config/database.constants';
 import { AppointmentStatus } from '../appointments/enums/appointment-status.enum';
 import { TriageAssessment } from '../triage-assessments/entities/triage-assessment.entity';
 import { TriageAssessmentStatus } from '../triage-assessments/enums/triage-assessment-status.enum';
@@ -31,15 +32,16 @@ export interface MedicalTicketPosition {
 @Injectable()
 export class MedicalTicketsService {
   constructor(
-    @InjectRepository(MedicalTicket)
+    @InjectRepository(MedicalTicket, GABO_DATABASE_CONNECTION)
     private readonly ticketsRepository: Repository<MedicalTicket>,
 
-    @InjectRepository(Appointment)
+    @InjectRepository(Appointment, GABO_DATABASE_CONNECTION)
     private readonly appointmentsRepository: Repository<Appointment>,
 
-    @InjectRepository(TriageAssessment)
+    @InjectRepository(TriageAssessment, GABO_DATABASE_CONNECTION)
     private readonly triageRepository: Repository<TriageAssessment>,
 
+    @InjectDataSource(GABO_DATABASE_CONNECTION)
     private readonly dataSource: DataSource,
   ) {}
 
