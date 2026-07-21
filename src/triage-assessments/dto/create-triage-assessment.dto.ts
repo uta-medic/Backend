@@ -3,19 +3,22 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
 export class CreateTriageAssessmentDto {
   @ApiProperty({
     description: 'Identificador de la cita médica',
-    example: '86cfb85c-6084-4111-8337-002248e102e2',
+    example: '086FB8B5-6B84-F111-B337-002248E10E22',
   })
-  @IsUUID('4', {
-    message: 'El identificador de la cita debe ser un UUID válido',
-  })
-  appointmentId: string;
+  @Matches(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    {
+      message: 'El identificador de la cita debe tener un formato GUID válido',
+    },
+  )
+  appointmentId!: string;
 
   @ApiProperty({
     description: 'Síntomas declarados por el paciente',
@@ -31,7 +34,7 @@ export class CreateTriageAssessmentDto {
   @MaxLength(2000, {
     message: 'Los síntomas no pueden superar los 2000 caracteres',
   })
-  reportedSymptoms: string;
+  reportedSymptoms!: string;
 
   @ApiPropertyOptional({
     description: 'Información adicional proporcionada por el paciente',
