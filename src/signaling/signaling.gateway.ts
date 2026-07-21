@@ -4,8 +4,20 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { UserRole } from '../users/entities/user.entity';
+
+interface AuthenticatedUser {
+  userId: string;
+  ci: string;
+  name: string;
+  role: UserRole;
+}
 
 interface WaitingPatient {
   socketId: string;
@@ -18,36 +30,98 @@ interface RoomInfo {
   waitingPatient?: WaitingPatient;
 }
 
-@WebSocketGateway({ cors: { origin: 'https://jolly-field-07dc5a10f.7.azurestaticapps.net' } })
+@WebSocketGateway({
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'https://jolly-field-07dc5a10f.7.azurestaticapps.net',
+    ],
+  },
+})
+//@WebSocketGateway({ cors: { origin: 'https://jolly-field-07dc5a10f.7.azurestaticapps.net' } })
 //@WebSocketGateway({ cors: { origin: '*' } })
-export class SignalingGateway {
+export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   private rooms = new Map<string, RoomInfo>();
 
+  constructor(
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
+
+  /**
+   * Se ejecuta en cada conexión nueva de socket.
+   * El cliente debe enviar el token así: io(url, { auth: { token: '<JWT>' } })
+   * - Si manda un token válido: queda autenticado (client.data.user).
+   * - Si manda un token inválido/expirado: se desconecta (probable intento de fraude).
+   * - Si no manda token: se permite la conexión sin autenticar (para el chat de soporte anónimo),
+   *   pero no podrá usar 'register-role' como doctor/paciente.
+   */
+  handleConnection(client: Socket) {
+    const token = client.handshake.auth?.token as string | undefined;
+
+    if (!token) {
+      console.log(`[AUDITORÍA] Cliente ${client.id} conectado sin token (modo anónimo/soporte)`);
+      return;
+    }
+
+    try {
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+      client.data.user = {
+        userId: payload.sub,
+        ci: payload.ci,
+        name: payload.name,
+        role: payload.role,
+      } as AuthenticatedUser;
+      console.log(`[AUDITORÍA] Cliente ${client.id} autenticado como ${payload.role} (${payload.name})`);
+    } catch {
+      console.log(`[AUDITORÍA] Cliente ${client.id} rechazado: token inválido o expirado`);
+      client.emit('auth-error', { message: 'Token inválido o expirado' });
+      client.disconnect(true);
+    }
+  }
+
+  handleDisconnect(client: Socket) {
+    // Limpieza básica: si el doctor que se desconecta tenía una sala activa, la liberamos
+    for (const [roomId, room] of this.rooms.entries()) {
+      if (room.doctorSocketId === client.id) {
+        this.rooms.delete(roomId);
+      }
+    }
+  }
+
   @SubscribeMessage('register-role')
   handleRegisterRole(
-    @MessageBody() data: { roomId: string; role: 'doctor' | 'paciente'; name: string; ci: string },
+    @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
+    const user = client.data.user as AuthenticatedUser | undefined;
+    if (!user) {
+      client.emit('auth-error', { message: 'Debes iniciar sesión para unirte a la consulta' });
+      return;
+    }
+
     client.join(data.roomId);
     const room = this.rooms.get(data.roomId) ?? {};
 
-    if (data.role === 'doctor') {
+    if (user.role === UserRole.DOCTOR) {
       room.doctorSocketId = client.id;
       this.rooms.set(data.roomId, room);
       if (room.waitingPatient) {
         client.emit('patient-waiting', room.waitingPatient);
       }
-      console.log(`[AUDITORÍA] Doctor ${data.name} (CI ${data.ci}) entró a sala ${data.roomId}`);
+      console.log(`[AUDITORÍA] Doctor ${user.name} (CI ${user.ci}) entró a sala ${data.roomId}`);
     } else {
-      room.waitingPatient = { socketId: client.id, name: data.name, ci: data.ci };
+      room.waitingPatient = { socketId: client.id, name: user.name, ci: user.ci };
       this.rooms.set(data.roomId, room);
       if (room.doctorSocketId) {
         this.server.to(room.doctorSocketId).emit('patient-waiting', room.waitingPatient);
       }
-      console.log(`[AUDITORÍA] Paciente ${data.name} (CI ${data.ci}) esperando en sala ${data.roomId}`);
+      console.log(`[AUDITORÍA] Paciente ${user.name} (CI ${user.ci}) esperando en sala ${data.roomId}`);
     }
   }
 
@@ -56,6 +130,12 @@ export class SignalingGateway {
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
+    const user = client.data.user as AuthenticatedUser | undefined;
+    if (!user || user.role !== UserRole.DOCTOR) {
+      client.emit('auth-error', { message: 'Solo un doctor autenticado puede admitir pacientes' });
+      return;
+    }
+
     const room = this.rooms.get(data.roomId);
     if (room?.waitingPatient) {
       this.server.to(room.waitingPatient.socketId).emit('call-admitted');
@@ -115,14 +195,14 @@ export class SignalingGateway {
     client.to(data.roomId).emit('chat-message', payload);
   }
 
-  //soporte
+  //soporte (canal anónimo, no requiere autenticación)
   @SubscribeMessage('register-contact')
   handleRegisterContact(
     @MessageBody() data: { roomId: string; name: string; ci: string; phone: string },
     @ConnectedSocket() client: Socket,
   ) {
     client.join(data.roomId);
-    // TODO: cuando exista la base de datos, guardar este lead/contacto real
+    // TODO: guardar este lead/contacto real en la base de datos (tabla de contactos, no de usuarios)
     console.log(`[AUDITORÍA-CONTACTO] ${data.name} (CI ${data.ci}, Tel ${data.phone}) inició chat de soporte en sala ${data.roomId}`);
   }
 
