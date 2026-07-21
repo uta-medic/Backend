@@ -62,7 +62,77 @@ export class MedicalTicketsController {
   checkIn(@Param('id') id: string): Promise<MedicalTicket> {
     return this.medicalTicketsService.checkIn(id);
   }
+  @Patch(':id/call')
+  @ApiOperation({
+    summary: 'Llamar al siguiente paciente en espera',
+  })
+  @ApiOkResponse({
+    description: 'El paciente fue llamado correctamente',
+    type: MedicalTicket,
+  })
+  @ApiBadRequestResponse({
+    description: 'La ficha no se encuentra en espera',
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la ficha médica',
+  })
+  callPatient(@Param('id') id: string): Promise<MedicalTicket> {
+    return this.medicalTicketsService.callPatient(id);
+  }
 
+  @Patch(':id/start-service')
+  @ApiOperation({
+    summary: 'Iniciar la atención médica del paciente',
+  })
+  @ApiOkResponse({
+    description: 'La atención médica fue iniciada',
+    type: MedicalTicket,
+  })
+  @ApiBadRequestResponse({
+    description: 'El paciente todavía no fue llamado',
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la ficha médica',
+  })
+  startService(@Param('id') id: string): Promise<MedicalTicket> {
+    return this.medicalTicketsService.startService(id);
+  }
+
+  @Patch(':id/complete')
+  @ApiOperation({
+    summary: 'Finalizar la atención médica del paciente',
+  })
+  @ApiOkResponse({
+    description: 'La atención médica fue completada',
+    type: MedicalTicket,
+  })
+  @ApiBadRequestResponse({
+    description: 'La atención no se encuentra en curso',
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la ficha médica',
+  })
+  completeService(@Param('id') id: string): Promise<MedicalTicket> {
+    return this.medicalTicketsService.completeService(id);
+  }
+
+  @Patch(':id/no-show')
+  @ApiOperation({
+    summary: 'Marcar que el paciente llamado no se presentó',
+  })
+  @ApiOkResponse({
+    description: 'La ficha fue marcada como no asistió',
+    type: MedicalTicket,
+  })
+  @ApiBadRequestResponse({
+    description: 'El paciente todavía no fue llamado',
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la ficha médica',
+  })
+  markNoShow(@Param('id') id: string): Promise<MedicalTicket> {
+    return this.medicalTicketsService.markNoShow(id);
+  }
   @Get('queue')
   @ApiOperation({
     summary: 'Obtener la cola ordenada de un centro y especialidad',

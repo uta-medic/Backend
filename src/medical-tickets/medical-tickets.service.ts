@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { Appointment } from '../appointments/entities/appointment.entity';
+import { AppointmentStatus } from '../appointments/enums/appointment-status.enum';
 import { TriageAssessment } from '../triage-assessments/entities/triage-assessment.entity';
 import { TriageAssessmentStatus } from '../triage-assessments/enums/triage-assessment-status.enum';
 import { TriagePriority } from '../triage-assessments/enums/triage-priority.enum';
@@ -164,24 +165,186 @@ export class MedicalTicketsService {
   }
 
   async checkIn(id: string): Promise<MedicalTicket> {
+    return this.dataSource.transaction(async (manager) => {
+      const ticketsRepository = manager.getRepository(MedicalTicket);
+
+      const appointmentsRepository = manager.getRepository(Appointment);
+
+      const ticket = await ticketsRepository.findOne({
+        where: { id },
+      });
+
+      if (!ticket) {
+        throw new NotFoundException('No se encontró la ficha médica');
+      }
+
+      if (ticket.status === MedicalTicketStatus.WAITING) {
+        throw new BadRequestException(
+          'El paciente ya realizó su registro de llegada',
+        );
+      }
+
+      if (ticket.status !== MedicalTicketStatus.READY_FOR_CHECK_IN) {
+        throw new BadRequestException(
+          'La ficha no está disponible para registrar la llegada',
+        );
+      }
+
+      const appointment = await appointmentsRepository.findOne({
+        where: {
+          id: ticket.appointmentId,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException('No se encontró la cita relacionada');
+      }
+
+      ticket.status = MedicalTicketStatus.WAITING;
+      ticket.checkedInAt = new Date();
+
+      appointment.status = AppointmentStatus.WAITING;
+
+      await appointmentsRepository.save(appointment);
+
+      return ticketsRepository.save(ticket);
+    });
+  }
+  async callPatient(id: string): Promise<MedicalTicket> {
     const ticket = await this.findOne(id);
 
-    if (ticket.status === MedicalTicketStatus.WAITING) {
+    if (ticket.status !== MedicalTicketStatus.WAITING) {
       throw new BadRequestException(
-        'El paciente ya realizó su registro de llegada',
+        'Solo se puede llamar a un paciente que está en espera',
       );
     }
 
-    if (ticket.status !== MedicalTicketStatus.READY_FOR_CHECK_IN) {
-      throw new BadRequestException(
-        'La ficha no está disponible para realizar el registro de llegada',
-      );
-    }
-
-    ticket.status = MedicalTicketStatus.WAITING;
-    ticket.checkedInAt = new Date();
+    ticket.status = MedicalTicketStatus.CALLED;
+    ticket.calledAt = new Date();
 
     return this.ticketsRepository.save(ticket);
+  }
+
+  async startService(id: string): Promise<MedicalTicket> {
+    return this.dataSource.transaction(async (manager) => {
+      const ticketsRepository = manager.getRepository(MedicalTicket);
+
+      const appointmentsRepository = manager.getRepository(Appointment);
+
+      const ticket = await ticketsRepository.findOne({
+        where: { id },
+      });
+
+      if (!ticket) {
+        throw new NotFoundException('No se encontró la ficha médica');
+      }
+
+      if (ticket.status !== MedicalTicketStatus.CALLED) {
+        throw new BadRequestException(
+          'Solo se puede iniciar la atención de un paciente llamado',
+        );
+      }
+
+      const appointment = await appointmentsRepository.findOne({
+        where: {
+          id: ticket.appointmentId,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException('No se encontró la cita relacionada');
+      }
+
+      ticket.status = MedicalTicketStatus.IN_SERVICE;
+      ticket.serviceStartedAt = new Date();
+
+      appointment.status = AppointmentStatus.IN_PROGRESS;
+
+      await appointmentsRepository.save(appointment);
+
+      return ticketsRepository.save(ticket);
+    });
+  }
+
+  async completeService(id: string): Promise<MedicalTicket> {
+    return this.dataSource.transaction(async (manager) => {
+      const ticketsRepository = manager.getRepository(MedicalTicket);
+
+      const appointmentsRepository = manager.getRepository(Appointment);
+
+      const ticket = await ticketsRepository.findOne({
+        where: { id },
+      });
+
+      if (!ticket) {
+        throw new NotFoundException('No se encontró la ficha médica');
+      }
+
+      if (ticket.status !== MedicalTicketStatus.IN_SERVICE) {
+        throw new BadRequestException(
+          'Solo se puede finalizar una atención que está en curso',
+        );
+      }
+
+      const appointment = await appointmentsRepository.findOne({
+        where: {
+          id: ticket.appointmentId,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException('No se encontró la cita relacionada');
+      }
+
+      ticket.status = MedicalTicketStatus.COMPLETED;
+      ticket.completedAt = new Date();
+
+      appointment.status = AppointmentStatus.COMPLETED;
+
+      await appointmentsRepository.save(appointment);
+
+      return ticketsRepository.save(ticket);
+    });
+  }
+
+  async markNoShow(id: string): Promise<MedicalTicket> {
+    return this.dataSource.transaction(async (manager) => {
+      const ticketsRepository = manager.getRepository(MedicalTicket);
+
+      const appointmentsRepository = manager.getRepository(Appointment);
+
+      const ticket = await ticketsRepository.findOne({
+        where: { id },
+      });
+
+      if (!ticket) {
+        throw new NotFoundException('No se encontró la ficha médica');
+      }
+
+      if (ticket.status !== MedicalTicketStatus.CALLED) {
+        throw new BadRequestException(
+          'Solo puede marcarse como no asistió después de llamar al paciente',
+        );
+      }
+
+      const appointment = await appointmentsRepository.findOne({
+        where: {
+          id: ticket.appointmentId,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException('No se encontró la cita relacionada');
+      }
+
+      ticket.status = MedicalTicketStatus.NO_SHOW;
+
+      appointment.status = AppointmentStatus.NO_SHOW;
+
+      await appointmentsRepository.save(appointment);
+
+      return ticketsRepository.save(ticket);
+    });
   }
 
   async findQueue(query: MedicalTicketQueueQueryDto): Promise<MedicalTicket[]> {
