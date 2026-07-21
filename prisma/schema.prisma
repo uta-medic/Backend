@@ -1,0 +1,39 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+model MedicalFile {
+  id           String        @id @default(uuid())
+  patientCi    String
+  uploadedById String
+  fileName     String
+  fileType     String
+  mimeType     String
+  sizeBytes    Int
+  blobPath     String
+  description  String?
+  createdAt    DateTime      @default(now())
+  auditLogs    AuditLog[]
+
+  @@index([patientCi])
+}
+
+model AuditLog {
+  id         String       @id @default(uuid())
+  fileId     String
+  file       MedicalFile  @relation(fields: [fileId], references: [id])
+  userId     String
+  userRole   String
+  action     String
+  ipAddress  String?
+  createdAt  DateTime     @default(now())
+
+  @@index([fileId])
+  @@index([userId])
+}
