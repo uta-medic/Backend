@@ -1,0 +1,266 @@
+{
+  "info": {
+    "_postman_id": "f5e7294d-fb49-4511-8bb4-0f3caaf5c0d4",
+    "name": "Uta Medic Backend",
+    "description": "Coleccion para probar endpoints, casos positivos y errores comunes del backend Uta Medic.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health - GET /",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Debe responder Hello World!"
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor AI - List My Patients",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-doctor-user-id",
+            "value": "{{doctorUserId}}",
+            "description": "Solo para pruebas locales con DEV_AUTH_DOCTOR_HEADER_ENABLED=true. Debe ser Doctors.user_id."
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ai/patients",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "doctor-ai",
+            "patients"
+          ]
+        },
+        "description": "Lista pacientes activos asignados al medico. Copia patientId para probar /doctor-ai/analyze."
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor AI - List My Patients - Missing Auth",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ai/patients",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "doctor-ai",
+            "patients"
+          ]
+        },
+        "description": "Caso de prueba negativo. Debe responder 401 si no hay JWT ni x-doctor-user-id."
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor AI - List My Patients - Invalid Doctor Header",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-doctor-user-id",
+            "value": "abc"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ai/patients",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "doctor-ai",
+            "patients"
+          ]
+        },
+        "description": "Caso de prueba negativo. Debe responder 400 porque el header no es UUID."
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor AI - Analyze Patient",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-doctor-user-id",
+            "value": "{{doctorUserId}}",
+            "description": "Solo para pruebas locales con DEV_AUTH_DOCTOR_HEADER_ENABLED=true. Debe ser Doctors.user_id."
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"question\": \"Resume el caso clinico y dame posibles diagnosticos diferenciales.\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ai/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "doctor-ai",
+            "analyze"
+          ]
+        },
+        "description": "Analiza un paciente asignado. Usa patientId obtenido de Doctor AI - List My Patients."
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor AI - Analyze Patient - Invalid Body",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-doctor-user-id",
+            "value": "{{doctorUserId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientId\": \"no-es-uuid\",\n  \"question\": \"ok\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ai/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "doctor-ai",
+            "analyze"
+          ]
+        },
+        "description": "Caso de prueba negativo. Debe responder 400 por UUID invalido y pregunta demasiado corta."
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor AI - Analyze Patient - Extra Field",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-doctor-user-id",
+            "value": "{{doctorUserId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"question\": \"Resume el caso clinico.\",\n  \"extra\": \"este campo debe fallar\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ai/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "doctor-ai",
+            "analyze"
+          ]
+        },
+        "description": "Caso de prueba negativo. Debe responder 400 porque forbidNonWhitelisted esta activo."
+      },
+      "response": []
+    },
+    {
+      "name": "User AI - Chat",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Estoy cerca de Sopocachi y necesito encontrar un hospital cercano.\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/user-ai/chat",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "user-ai",
+            "chat"
+          ]
+        },
+        "description": "Consulta ciudadana al agente agenteUtamedic. No requiere patientId, doctorId ni conexion a Supabase desde el backend."
+      },
+      "response": []
+    },
+    {
+      "name": "User AI - Chat - Invalid Body",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/user-ai/chat",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "user-ai",
+            "chat"
+          ]
+        },
+        "description": "Caso negativo. Debe responder 400 porque falta message, query o consulta."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "doctorUserId",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "patientId",
+      "value": "11111111-1111-1111-1111-111111111111",
+      "type": "string"
+    }
+  ]
+}

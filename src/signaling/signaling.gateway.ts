@@ -34,8 +34,10 @@ interface RoomInfo {
   cors: {
     origin: [
       'http://localhost:5173',
+      'https://uta-medic.vercel.app',
       'https://jolly-field-07dc5a10f.7.azurestaticapps.net',
     ],
+    credentials: true,
   },
 })
 //@WebSocketGateway({ cors: { origin: 'https://jolly-field-07dc5a10f.7.azurestaticapps.net' } })
