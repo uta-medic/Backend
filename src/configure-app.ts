@@ -1,4 +1,8 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  RequestMethod,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -10,6 +14,8 @@ interface ApplicationOptions {
 }
 
 const DEPLOYED_FRONTEND_ORIGIN = 'https://uta-medic.vercel.app';
+const STATIC_WEB_APP_ORIGIN =
+  'https://jolly-field-07dc5a10f.7.azurestaticapps.net';
 
 export function configureApplication(
   app: INestApplication,
@@ -21,13 +27,32 @@ export function configureApplication(
     'FRONTEND_URL',
     'http://localhost:5173',
   );
+  const configuredOrigins = config
+    .get<string>('CORS_ORIGINS', '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const allowedOrigins = new Set([
+    frontendUrl,
+    DEPLOYED_FRONTEND_ORIGIN,
+    STATIC_WEB_APP_ORIGIN,
+    ...configuredOrigins,
+  ]);
 
   const correlationIdMiddleware = new CorrelationIdMiddleware();
   app.use(correlationIdMiddleware.use.bind(correlationIdMiddleware));
-  app.setGlobalPrefix(prefix);
+  app.setGlobalPrefix(prefix, {
+    exclude: [
+      { path: 'auth/login', method: RequestMethod.POST },
+      { path: 'auth/register', method: RequestMethod.POST },
+      { path: 'auth/profile', method: RequestMethod.GET },
+    ],
+  });
   app.use(helmet());
   app.enableCors({
-    origin: [...new Set([frontendUrl, DEPLOYED_FRONTEND_ORIGIN])],
+    origin: (origin, callback) => {
+      callback(null, !origin || allowedOrigins.has(origin));
+    },
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -38,6 +63,7 @@ export function configureApplication(
       'X-Doctor-Id',
     ],
     exposedHeaders: ['X-Correlation-Id'],
+    maxAge: 86_400,
   });
   app.useGlobalPipes(
     new ValidationPipe({
